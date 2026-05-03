@@ -1,3 +1,10 @@
+<div align="center">
+  <img src="assets/logo.png" width="200" alt="AniScraper Logo">
+  
+  # AniScraper
+  
+  一个逻辑驱动的元数据抓取工具。
+</div>
 # 🎬 AniScraper (本地动漫元数据刮削器)
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
