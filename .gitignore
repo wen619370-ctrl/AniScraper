@@ -1,0 +1,24 @@
+# 忽略打包产物 (对应你的 build 和 dist 文件夹)
+build/
+dist/
+
+# 忽略日志 (对应你的 logs 文件夹)
+logs/
+
+# 忽略 Python 缓存和环境
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# 忽略 IDE 配置 (如果你用 VS Code 或 PyCharm)
+.vscode/
+.idea/
+
+# 关键：配置文件处理
+# 如果你的 config.json 和 config.yaml 包含 API Key、密码或私人路径，
+# 请不要上传真实文件。
+# 建议：将它们重命名为 config.json.example 并上传，本地保留原始文件。
+config.json
+config.yaml
