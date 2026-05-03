@@ -30,7 +30,7 @@ AniScraper 是一款专注于**日本动画**本地元数据（NFO）生成与�
 
 ## 🚀 快速上手
 
-1. 前往 [Releases](https://github.com/wen619370-ctrl/AniScraper/releases) 页面下载最新版本的 `AniScraper.exe`（单文件独立运行版，无需配置 Python 环境）。
+1. 前往 [Releases](https://github.com/wen619370-ctrl/AniScraper/releases) 页面下载最新版本的 `AniScraper.zip`。
 2. 双击运行，在顶部菜单栏点击 `文件 -> 添加媒体库`，挂载你的本地动漫资源根目录。
 3. 在左侧面板选择需要处理的文件夹，系统将自动穿透扫描并列出有效视频。
 4. 在顶部核对 Bangumi 搜索结果后，点击执行。系统将在底部日志面板实时反馈 NFO 生成状态。
