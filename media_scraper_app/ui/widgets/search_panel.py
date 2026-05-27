@@ -46,7 +46,7 @@ class SearchPanel(QWidget):
 
         # 2. 数据源选择下拉框
         self.combo_source = QComboBox()
-        self.combo_source.addItems(["Bangumi", "TMDB"])
+        self.combo_source.addItems(["Bangumi"])
         self.combo_source.setMinimumHeight(32)
         self.combo_source.setFixedWidth(100)
         self.combo_source.setCursor(Qt.PointingHandCursor)

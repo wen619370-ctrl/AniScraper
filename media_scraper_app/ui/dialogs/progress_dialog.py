@@ -11,7 +11,8 @@ class ProgressDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("系统处理中")
-        self.setFixedSize(400, 110)
+        self.setMinimumSize(350, 100)
+        self.resize(400, 110)
         # 设置为应用程序模态，阻塞底层窗口交互
         self.setWindowModality(Qt.ApplicationModal)
         # 移除原生的关闭按钮，强迫症防坑：文件移动一半被用户强制关掉容易产生碎片

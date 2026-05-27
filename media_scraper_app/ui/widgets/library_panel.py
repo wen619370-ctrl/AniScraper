@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QSplitter, QListWidget, QListWidgetItem, 
     QTableWidget, QTableWidgetItem, QHeaderView, QLabel, QPushButton,
-    QLineEdit # ✅ 新增引入搜索框组件
+    QLineEdit, QHBoxLayout
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
@@ -10,9 +10,12 @@ class LibraryPanel(QWidget):
     request_network_episodes = Signal(object) 
     # 信号定义：请求手动绑定物理文件 (参数：网络单集字典，当前剧集数据)
     request_manual_link = Signal(object, object)
+    # 信号定义：请求批量下载所有未缓存的剧集详情
+    request_batch_download = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.current_selected_tvshow = None  # 缓存当前选中的剧集数据
         self._setup_ui()
 
     def _setup_ui(self):
@@ -20,7 +23,10 @@ class LibraryPanel(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10) # 加上一点组件间距
         
-        # 【状态栏美化与高度锁定】
+        # 【状态栏美化与高度锁定】改为水平布局，左侧文字 + 右侧按钮
+        status_layout = QHBoxLayout()
+        status_layout.setSpacing(8)
+
         self.lbl_status = QLabel("📊 逻辑媒体库：等待扫描 (左侧列表基于本地，点击触发网络校验)")
         self.lbl_status.setFixedHeight(35) 
         self.lbl_status.setStyleSheet("""
@@ -33,25 +39,42 @@ class LibraryPanel(QWidget):
                 padding-left: 10px;
             }
         """)
-        main_layout.addWidget(self.lbl_status)
+        status_layout.addWidget(self.lbl_status, 1)  # 文字占满剩余空间
+
+        # 批量下载按钮
+        self.btn_batch_download = QPushButton("📥 下载全部未缓存详情")
+        self.btn_batch_download.setFixedHeight(30)
+        self.btn_batch_download.setToolTip("扫描所有已识别动画，批量下载尚未缓存的剧集详情数据")
+        self.btn_batch_download.setCursor(Qt.PointingHandCursor)
+        self.btn_batch_download.setStyleSheet("""
+            QPushButton {
+                padding: 0px 14px;
+                background-color: #4a90e2;
+                border: 1px solid #3a7bc8;
+                border-radius: 4px;
+                font-weight: bold;
+                color: white;
+            }
+            QPushButton:hover { background-color: #3a7bc8; }
+            QPushButton:pressed { background-color: #2a6bb8; }
+            QPushButton:disabled { background-color: #ccc; color: #888; }
+        """)
+        self.btn_batch_download.clicked.connect(self._on_batch_download_clicked)
+        status_layout.addWidget(self.btn_batch_download)
+
+        main_layout.addLayout(status_layout)
 
         self.splitter = QSplitter(Qt.Horizontal)
         
-        # ==========================================
-        # ✅ 重构左侧区域：套一层外壳，用来装【搜索框 + 列表】
-        # ==========================================
-        # ==========================================
         # ✅ 重构左侧区域：套一层外壳，用来装【搜索栏 + 列表】
-        # ==========================================
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0) # 内部不再留白
         left_layout.setSpacing(5)
 
         # ==========================================
-        # 🌟 核心修复：创建一个水平布局的“托盘”，把输入框和按钮肩并肩放进去！
+        # 🌟 核心修复：创建一个水平布局的"托盘"，把输入框和按钮肩并肩放进去！
         # ==========================================
-        from PySide6.QtWidgets import QHBoxLayout
         search_toolbar_layout = QHBoxLayout()
         search_toolbar_layout.setSpacing(5)
 
@@ -110,12 +133,18 @@ class LibraryPanel(QWidget):
         self.table_episodes.setHorizontalHeaderLabels(["集数", "网络标准标题", "当前映射物理文件", "操作"])
         
         header = self.table_episodes.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents) 
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents) 
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(2, QHeaderView.Stretch) # 路径列拉伸
-        header.setSectionResizeMode(3, QHeaderView.Fixed)
-        self.table_episodes.setColumnWidth(3, 100) # 操作按钮列宽
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.Interactive)
+        header.setSectionResizeMode(3, QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        # 设置默认列宽与最小宽度，用户可拖拽调整
+        self.table_episodes.setColumnWidth(0, 80)   # 集数
+        self.table_episodes.setColumnWidth(1, 200)  # 网络标准标题
+        self.table_episodes.setColumnWidth(2, 300)  # 当前映射物理文件
+        self.table_episodes.setColumnWidth(3, 100)  # 操作按钮
+        self.table_episodes.setMinimumWidth(400)
+        header.setMinimumSectionSize(60)
         
         self.table_episodes.setAlternatingRowColors(True)
         self.table_episodes.setSelectionBehavior(QTableWidget.SelectRows)
@@ -127,9 +156,6 @@ class LibraryPanel(QWidget):
         # 弹性注入：把剩余垂直空间全给 splitter
         main_layout.addWidget(self.splitter, 1)
 
-    # ==========================================
-    # ✅ 新增：内存级极速检索的核心逻辑
-    # ==========================================
     def _on_search_text_changed(self, text: str):
         """当搜索框文字改变时触发，直接操作内存节点显示/隐藏"""
         search_text = text.lower() # 统一转小写，实现不区分大小写匹配
@@ -151,14 +177,10 @@ class LibraryPanel(QWidget):
         for dir_path, show_data in index_data.items():
             title = show_data.get("title", "未知剧集")
             
-            # ==========================================
-            # ✅ 终极防失忆补丁：把目录路径死死焊在数据字典里！
-            # 绝对不能让这个 dir_path 烂在循环的外面！
-            # ==========================================
             if isinstance(show_data, dict):
-                show_data['local_dir'] = dir_path
-                show_data['path'] = dir_path
-                show_data['folder_path'] = dir_path  # 多焊几个键名，万无一失！
+                show_data["local_dir"] = dir_path
+                show_data["path"] = dir_path
+                show_data["folder_path"] = dir_path  # 多焊几个键名，万无一失！
                 
             item = QListWidgetItem(f"📺 {title}")
             item.setData(Qt.UserRole, show_data)
@@ -167,13 +189,40 @@ class LibraryPanel(QWidget):
         # 加载完数据后，顺手把搜索框清空
         self.search_input.clear()
 
+    def select_show_by_data(self, show_data: dict):
+        """外部调用：选中指定剧集（仅选中，不触发加载，由调用方负责加载）"""
+        for i in range(self.list_shows.count()):
+            item = self.list_shows.item(i)
+            data = item.data(Qt.UserRole)
+            # 确保 local_dir 存在且匹配
+            if data and data.get("local_dir") == show_data.get("local_dir"):
+                self.list_shows.setCurrentItem(item)
+                return
+
     @Slot(QListWidgetItem)
     def _on_show_clicked(self, item: QListWidgetItem):
         """点击大纲，向主控台发射请求拉取网络的信号"""
         show_data = item.data(Qt.UserRole)
-        self.lbl_status.setText(f"正在加载【{show_data.get('title')}】的单集映射...")
+        self.lbl_status.setText(f"正在加载【{show_data.get("title")}】的单集映射...")
         self.table_episodes.setRowCount(0) # 先清空表格
         self.request_network_episodes.emit(show_data)
+
+    def _on_batch_download_clicked(self):
+        """点击批量下载按钮，收集所有未缓存的剧集并发射信号"""
+        # 收集所有有 bangumi_id 的剧集
+        all_shows = []
+        for i in range(self.list_shows.count()):
+            item = self.list_shows.item(i)
+            show_data = item.data(Qt.UserRole)
+            if show_data and show_data.get("bangumi_id"):
+                all_shows.append(show_data)
+
+        if not all_shows:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "无需下载", "当前媒体库中没有找到已识别的动画条目。")
+            return
+
+        self.request_batch_download.emit(all_shows)
 
     def render_episodes(self, network_episodes: list, local_mapping: dict, show_data: dict):
         """渲染网络与本地的缝合视图 (带探照灯的满血物理降维版)"""
@@ -181,12 +230,14 @@ class LibraryPanel(QWidget):
         logger.debug("=== 🧨 终极缝合引擎启动 ===")
         
         # 1. 尝试从各个角落挖出真实的物理路径！
-        folder_path = show_data.get('local_dir') or show_data.get('path') or show_data.get('folder_path')
+        folder_path = show_data.get("local_dir") or show_data.get("path") or show_data.get("folder_path")
         
         # 如果 show_data 里没有，去主窗口的实例变量里找（极其常见）
         if not folder_path:
+            # 这里假设 current_selected_tvshow 总是最新的，并且它有正确的 local_dir
+            # 这个假设是基于主窗口的 _handle_library_show_request 会更新 _current_library_show
             if hasattr(self, 'current_selected_tvshow') and self.current_selected_tvshow:
-                folder_path = self.current_selected_tvshow.get('local_dir') or self.current_selected_tvshow.get('path')
+                folder_path = self.current_selected_tvshow.get("local_dir") or self.current_selected_tvshow.get("path")
 
         # ==========================================
         # 🛡️ 终极路径纠偏装甲：纯文本降维打击！绝对不相信硬盘！
@@ -244,10 +295,10 @@ class LibraryPanel(QWidget):
         # 以下是 UI 渲染部分，保持不变
         # ==========================================
         self.table_episodes.setRowCount(len(network_episodes))
-        self.lbl_status.setText(f"✅ 【{show_data.get('title')}】映射加载完毕")
+        self.lbl_status.setText(f"✅ 【{show_data.get("title")}】映射加载完毕")
         
         for row, ep_data in enumerate(network_episodes):
-            ep_num = ep_data.get('sort') or ep_data.get('ep')
+            ep_num = ep_data.get("sort") or ep_data.get("ep")
             try:
                 ep_float = float(ep_num)
             except (ValueError, TypeError):
@@ -259,7 +310,7 @@ class LibraryPanel(QWidget):
             item_ep.setTextAlignment(Qt.AlignCenter)
             self.table_episodes.setItem(row, 0, item_ep)
 
-            title = ep_data.get('name_cn') or ep_data.get('name') or '未命名'
+            title = ep_data.get("name_cn") or ep_data.get("name") or '未命名'
             self.table_episodes.setItem(row, 1, QTableWidgetItem(title))
 
             item_path = QTableWidgetItem(local_path)

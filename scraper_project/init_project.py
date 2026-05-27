@@ -35,7 +35,6 @@ FILES = [
     "core/__init__.py",
     "core/parser.py",
     "core/api_client.py",
-    "core/scraper_tmdb.py",
     "core/file_manager.py",
     "workers/__init__.py",
     "workers/scrape_worker.py",

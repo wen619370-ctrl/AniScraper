@@ -1,11 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 
+# 获取当前脚本所在目录的绝对路径
+spec_dir = os.path.dirname(os.path.abspath(SPEC))
+media_scraper_dir = os.path.join(spec_dir, 'media_scraper_app')
 
 a = Analysis(
-    ['media_scraper_app\\main.py'],
+    [os.path.join(media_scraper_dir, 'main.py')],
     pathex=[],
     binaries=[],
-    datas=[('d:\\代码相关学习\\python\\个人项目\\类tmm\\media_scraper_app\\config.json', '.'), ('d:\\代码相关学习\\python\\个人项目\\类tmm\\media_scraper_app\\resources', 'resources')],
+    datas=[
+        (os.path.join(media_scraper_dir, 'config.json'), '.'),
+        (os.path.join(media_scraper_dir, 'resources'), 'resources')
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -32,7 +39,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['d:\\代码相关学习\\python\\个人项目\\类tmm\\media_scraper_app\\resources\\icons\\app.ico'],
+    icon=[os.path.join(media_scraper_dir, 'resources', 'icons', 'app.ico')],
 )
 coll = COLLECT(
     exe,

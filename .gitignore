@@ -22,3 +22,22 @@ env/
 # 建议：将它们重命名为 config.json.example 并上传，本地保留原始文件。
 config.json
 config.yaml
+
+# 日志文件
+*.log
+logs/
+
+# 缓存文件
+cache/
+*.pyc
+__pycache__/
+
+# 打包输出
+build/
+dist/
+
+# 测试/临时文件
+sandbox_test/
+*.zip
+nul
+task_progress.md

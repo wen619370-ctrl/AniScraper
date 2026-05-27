@@ -18,9 +18,7 @@ class ScrapeWorker(QThread):
         self.subject_id = subject_id
         
         # ✅ 新增：安全状态标志位
-        self._is_cancelled = False 
-        
-        self.finished.connect(self.deleteLater)
+        self._is_cancelled = False
 
     def cancel(self):
         """
@@ -79,12 +77,16 @@ class ScrapeWorker(QThread):
                         
                         # 【新增：清洗图片 iCCP 配置】
                         img = Image.open(io.BytesIO(resp.content))
-                        # 剥离可能引起报错的 ICC profile
-                        img.info.pop('icc_profile', None) 
                         
-                        # 重新转存为干净的 bytes
+                        # 重新转存为干净的 bytes，save 时不传入 icc_profile 即可剥离
                         clean_bytes_io = io.BytesIO()
-                        img.save(clean_bytes_io, format="PNG")
+                        # 转换为 RGB 以确保兼容性（防止 RGBA 转 JPEG 等问题，虽然这里存的是 PNG）
+                        if img.mode in ("RGBA", "P"):
+                            img = img.convert("RGBA")
+                        else:
+                            img = img.convert("RGB")
+                            
+                        img.save(clean_bytes_io, format="PNG", icc_profile=None)
                         poster_bytes = clean_bytes_io.getvalue()
                         
                     except Exception as e:

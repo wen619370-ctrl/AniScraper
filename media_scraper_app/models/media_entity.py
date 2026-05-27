@@ -26,7 +26,7 @@ class MediaEntity:
     release_group: Optional[str] = None # 压制组/发布组
     
     # 刮削后补充的信息 (准备写入 NFO 的数据)
-    tmdb_id: Optional[int] = None      # TMDB 唯一标识符
+    bangumi_id: Optional[int] = None   # Bangumi 唯一标识符
     plot: str = ""                     # 剧情简介
     poster_path: str = ""              # 海报本地或网络路径
     genres: List[str] = field(default_factory=list) # 类型标签
@@ -39,21 +39,18 @@ class Movie(MediaEntity):
 
 @dataclass
 class Episode(MediaEntity):
-    """单集数据模型"""
-    ep_number: float          # 集数 (可能存在 SP0.5 这种，所以用 float，但通常是 int)
-    title: str                # 单集标题 (通常是日文/中文标题)
-    summary: str = ""         # 单集简介
-    air_date: str = ""        # 播出日期
-    local_file_path: str = "" # 【核心枢纽】：绑定的本地物理文件路径
+    """单集实体（如：S02E04）"""
+    season: int = 1                    # 季号，默认第1季
+    episode: int = 1                   # 集号
+    episode_title: str = ""            # 单集标题
+
+    def __post_init__(self):
+        self.media_type = MediaType.EPISODE
 
 @dataclass
 class TVShow(MediaEntity):
-    """剧集数据模型 (已升级)"""
-    id: int
-    title: str
-    original_title: str = ""
-    year: str = ""
-    plot: str = ""
-    poster_url: str = ""
-    # 新增：包含的单集列表
-    episodes: List[Episode] = field(default_factory=list)
+    """剧集实体（用于整体管理，通常对应一个文件夹）"""
+    episodes: List[Episode] = field(default_factory=list) # 包含的单集列表
+
+    def __post_init__(self):
+        self.media_type = MediaType.TV_SHOW

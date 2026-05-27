@@ -26,11 +26,21 @@ class ConfigLoader:
         self.config = {
             "libraries": [],
             "min_video_size_mb": 150,
-            "auto_sort_scraped": False,
+            "auto_sort_scraped": "off",
             "auto_fill_search": False,
             # ✅ 新增：分页引擎配置
             "enable_pagination": False,   
-            "items_per_page": 50          
+            "items_per_page": 50,
+            # ✅ 新增：媒体库列表自动换行
+            "media_list_word_wrap": False,
+            # ✅ 新增：刮削时自动缓存剧集数据
+            "cache_on_scrape": False,
+            # ✅ 新增：主题设置 ("light" / "dark")
+            "theme": "light",
+            # ✅ 新增：日志面板最大保留行数
+            "log_max_lines": 1000,
+            # ✅ 新增：启动时自动加载上次媒体库
+            "auto_load_last_library": False
         }
         self.load_config()
 

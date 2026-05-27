@@ -18,6 +18,7 @@ class LibraryIndexer:
     def build_library_index(cls, root_path: str) -> dict:
         """
         全盘扫描，构建逻辑库索引。
+        支持复杂文件结构：tvshow.nfo 在父目录，单集 NFO 在子目录（如 Season 1/）的情况。
         :return: { 
             "文件夹绝对路径": {
                 "title": "剧集名", "plot": "简介", 
@@ -38,44 +39,99 @@ class LibraryIndexer:
         for dirpath, dirnames, filenames in os.walk(root):
             current_dir = Path(dirpath)
             
-            # 1. 寻找剧集总元数据
-            tvshow_nfo_path = current_dir / "tvshow.nfo"
-            # 【核心修复】：把 .exists() 改成 .is_file()，明确它必须是一个文件，绝不能是文件夹！
-            if not tvshow_nfo_path.is_file():
-                continue
-                
-            show_data = {"title": current_dir.name, "plot": "暂无简介", "episodes": [], "dir_path": str(current_dir.absolute())}
+            # 【终极平铺架构】：寻找当前目录下所有的 tvshow_*.nfo
+            tvshow_nfos = [f for f in filenames if f.lower().startswith('tvshow_') and f.lower().endswith('.nfo')]
             
-            try:
-                # 解析 tvshow.nfo
-                tree = ET.parse(tvshow_nfo_path)
-                xml_root = tree.getroot()
+            # 兼容旧版：如果存在 tvshow.nfo，也把它加进来
+            if 'tvshow.nfo' in [f.lower() for f in filenames]:
+                tvshow_nfos.append('tvshow.nfo')
                 
-                title_node = xml_root.find("title")
-                if title_node is not None and title_node.text:
-                    show_data["title"] = title_node.text
-                    
-                # 【关键新增】：提取身份证号，供后续网络懒加载使用
-                b_id_node = xml_root.find("bangumiid")
-                if b_id_node is not None and b_id_node.text:
-                    show_data["bangumi_id"] = int(b_id_node.text)
-                    
-            except Exception as e:
-                logger.warning(f"解析剧集 NFO 异常 [{tvshow_nfo_path}]: {e}")
+            # 如果当前目录没有任何 tvshow NFO，检查是否是纯平铺的独立视频 NFO 集合
+            if not tvshow_nfos:
+                other_nfos = [f for f in filenames if f.lower().endswith('.nfo')]
+                if other_nfos:
+                    # 检查当前目录是否在已记录的剧集目录下（避免重复收录子目录）
+                    is_sub_dir = False
+                    for existing_path in library_index.keys():
+                        if dirpath.startswith(existing_path.split('_')[0] + os.sep):
+                            is_sub_dir = True
+                            break
+                    if not is_sub_dir:
+                        # --- 情况 B: 纯平铺结构 (无任何 tvshow NFO，但有多个独立视频 NFO) ---
+                        for nfo_file in other_nfos:
+                            nfo_file_path = current_dir / nfo_file
+                            standalone_show = {
+                                "title": nfo_file_path.stem,
+                                "plot": "独立条目",
+                                "episodes": [],
+                                "dir_path": str(current_dir.absolute()),
+                                "is_standalone": True
+                            }
+                            ep_data = cls._parse_episode_nfo(nfo_file_path)
+                            if ep_data:
+                                standalone_show["title"] = ep_data.get("title", nfo_file_path.stem)
+                                standalone_show["episodes"].append(ep_data)
+                                try:
+                                    tree = ET.parse(nfo_file_path)
+                                    b_id = tree.getroot().findtext("bangumiid") or tree.getroot().findtext("id")
+                                    if b_id and b_id.isdigit():
+                                        standalone_show["bangumi_id"] = int(b_id)
+                                except: pass
+                                
+                                unique_key = f"{nfo_file_path.absolute()}"
+                                library_index[unique_key] = standalone_show
+                continue
 
-            # 2. 寻找并解析所有的单集 NFO
-            for filename in filenames:
-                file_path = current_dir / filename
-                if file_path.suffix.lower() == '.nfo' and filename.lower() != 'tvshow.nfo':
-                    ep_data = cls._parse_episode_nfo(file_path)
-                    if ep_data:
+            # --- 情况 A: 标准结构或终极平铺结构 (有 tvshow_*.nfo 或 tvshow.nfo) ---
+            # 遍历当前目录下的每一个 tvshow NFO，它们各自代表一部独立的动画
+            for tvshow_nfo_name in tvshow_nfos:
+                tvshow_nfo_path = current_dir / tvshow_nfo_name
+                show_data = {"title": current_dir.name, "plot": "暂无简介", "episodes": [], "dir_path": str(current_dir.absolute())}
+                
+                try:
+                    tree = ET.parse(tvshow_nfo_path)
+                    xml_root = tree.getroot()
+                    title_node = xml_root.find("title")
+                    if title_node is not None and title_node.text:
+                        show_data["title"] = title_node.text
+                    b_id_node = xml_root.find("bangumiid")
+                    if b_id_node is not None and b_id_node.text:
+                        show_data["bangumi_id"] = int(b_id_node.text)
+                except Exception as e:
+                    logger.warning(f"解析剧集 NFO 异常 [{tvshow_nfo_path}]: {e}")
+
+                # 收集属于这部动画的单集
+                # 逻辑：遍历所有单集 NFO，如果单集 NFO 内部的 bangumiid 与当前 tvshow 的 bangumiid 匹配，
+                # 或者单集 NFO 没有 bangumiid（兼容旧版），则将其归入当前动画。
+                for nfo_file_path in current_dir.rglob('*.nfo'):
+                    if nfo_file_path.name.lower().startswith('tvshow'): continue
+                    
+                    ep_data = cls._parse_episode_nfo(nfo_file_path)
+                    if not ep_data: continue
+                    
+                    # 检查归属权
+                    belongs_to_this_show = False
+                    try:
+                        ep_tree = ET.parse(nfo_file_path)
+                        ep_b_id = ep_tree.getroot().findtext("bangumiid")
+                        if ep_b_id and str(ep_b_id) == str(show_data.get("bangumi_id")):
+                            belongs_to_this_show = True
+                        elif not ep_b_id:
+                            # 兼容旧版：如果单集没有记录 ID，默认归属（可能会有误判，但这是旧数据的妥协）
+                            belongs_to_this_show = True
+                    except:
+                        belongs_to_this_show = True
+                        
+                    if belongs_to_this_show:
                         show_data["episodes"].append(ep_data)
 
-            # 3. 按集数进行排序，确保呈现时的连贯性
-            show_data["episodes"].sort(key=lambda x: float(x.get('ep', 9999)))
-            
-            # 将该剧集节点挂载到总索引树上 (以目录路径为唯一键)
-            library_index[str(current_dir.absolute())] = show_data
+                def _safe_float_ep(x):
+                    try: return float(x.get('ep', 9999))
+                    except: return 9999.0
+                show_data["episodes"].sort(key=_safe_float_ep)
+                
+                unique_key = f"{current_dir.absolute()}_{show_data.get('bangumi_id', show_data['title'])}"
+                library_index[unique_key] = show_data
 
         logger.info(f"索引构建完毕，共收录 {len(library_index)} 部剧集。")
         return library_index

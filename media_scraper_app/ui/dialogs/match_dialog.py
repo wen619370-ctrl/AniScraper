@@ -106,7 +106,17 @@ class MatchDialog(QDialog):
         self.table.setHorizontalHeaderLabels(["选择", "本地视频文件", "文件体积", "识别状态", "对应网络单集"])
         
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Interactive)
+        self.table.setColumnWidth(0, 50)   # 选择
+        self.table.setColumnWidth(1, 250)  # 本地视频文件
+        self.table.setColumnWidth(2, 80)   # 文件体积
+        self.table.setColumnWidth(3, 100)  # 识别状态
+        # 第4列(对应网络单集) 由 StretchLastSection 自动拉伸
+        self.table.horizontalHeader().setMinimumSectionSize(60)
         self.table.setAlternatingRowColors(True)
         self.table.setStyleSheet("""
             QTableWidget { border: 1px solid #ccc; background-color: #fff; }
@@ -279,8 +289,6 @@ class MatchDialog(QDialog):
             # 保留你原来的闭包监听逻辑
             combo.currentIndexChanged.connect(lambda idx, r=row: self._on_combo_changed(r, idx))
 
-        # 调整列宽让复选框小一点
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._toggle_small_files(False)
 
     def keyPressEvent(self, event):
